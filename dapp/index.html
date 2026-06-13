@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TruthStake</title>
+  <script type="module" src="https://cdn.jsdelivr.net/gh/nicolo-ribaudo/tc39-proposal-import-attributes-demo/lit-html.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/lit@3/+esm"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; padding: 2rem; }
+    h1 { color: #00ffa3; margin-bottom: 1rem; }
+    .container { max-width: 800px; margin: 0 auto; }
+    form { background: #1a1a2e; padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem; }
+    label { display: block; margin-bottom: 0.3rem; color: #aaa; font-size: 0.85rem; }
+    input, select { width: 100%; padding: 0.5rem; margin-bottom: 1rem; background: #0f0f1a; border: 1px solid #333; border-radius: 4px; color: #fff; }
+    button { background: #00ffa3; color: #000; border: none; padding: 0.6rem 1.2rem; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    button:hover { background: #00cc82; }
+    .claim-card { background: #1a1a2e; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; border-left: 3px solid #00ffa3; }
+    .claim-card.resolved { border-left-color: #ffa500; }
+    .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.75rem; }
+    .badge-true { background: #00ffa3; color: #000; }
+    .badge-false { background: #ff4444; color: #fff; }
+    .stats { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+    .stat { background: #1a1a2e; padding: 1rem; border-radius: 8px; flex: 1; text-align: center; }
+    .stat-value { font-size: 1.5rem; color: #00ffa3; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⚡ TruthStake</h1>
+    <p style="margin-bottom:1.5rem;color:#888;">Decentralized fact-checking market. Stake on claims, AI judges truth.</p>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-value" id="stat-claims">0</div><div>Claims</div></div>
+      <div class="stat"><div class="stat-value" id="stat-staked">0</div><div>Total Staked</div></div>
+      <div class="stat"><div class="stat-value" id="stat-resolved">0</div><div>Resolved</div></div>
+    </div>
+
+    <form id="post-form">
+      <h3 style="margin-bottom:1rem;color:#00ffa3;">Post a Claim</h3>
+      <label>Claim Text</label>
+      <input id="claim-text" placeholder="e.g. Company X revenue exceeded $10M in 2025" required>
+      <label>Source URL</label>
+      <input id="source-url" placeholder="https://..." required>
+      <label>Stake Amount</label>
+      <input id="stake-amount" type="number" min="1" value="100" required>
+      <button type="submit">Post Claim</button>
+    </form>
+
+    <form id="stake-form">
+      <h3 style="margin-bottom:1rem;color:#00ffa3;">Stake on Claim</h3>
+      <label>Claim Key</label>
+      <input id="stake-key" placeholder="claim_1" required>
+      <label>Position</label>
+      <select id="stake-position"><option value="true">True</option><option value="false">False</option></select>
+      <button type="submit">Stake</button>
+    </form>
+
+    <form id="resolve-form">
+      <h3 style="margin-bottom:1rem;color:#00ffa3;">Resolve Claim</h3>
+      <label>Claim Key</label>
+      <input id="resolve-key" placeholder="claim_1" required>
+      <button type="submit">Resolve (AI Judge)</button>
+    </form>
+
+    <h3 style="margin:1.5rem 0 1rem;color:#00ffa3;">Claims</h3>
+    <div id="claims-list"></div>
+  </div>
+
+  <script type="module">
+    const API = window.__GENLAYER_API__ || 'http://localhost:4000';
+
+    document.getElementById('post-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = document.getElementById('claim-text').value;
+      const url = document.getElementById('source-url').value;
+      const amount = parseInt(document.getElementById('stake-amount').value);
+      try {
+        const res = await fetch(`${API}/contract/call`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method: 'post_claim', args: [text, url, amount] })
+        });
+        const data = await res.json();
+        alert(`Claim posted: ${data.result || JSON.stringify(data)}`);
+        loadStats();
+      } catch (err) { alert('Error: ' + err.message); }
+    });
+
+    document.getElementById('stake-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const key = document.getElementById('stake-key').value;
+      const position = document.getElementById('stake-position').value;
+      try {
+        const res = await fetch(`${API}/contract/call`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method: 'stake_on', args: [key, position] })
+        });
+        const data = await res.json();
+        alert(`Staked: ${JSON.stringify(data)}`);
+      } catch (err) { alert('Error: ' + err.message); }
+    });
+
+    document.getElementById('resolve-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const key = document.getElementById('resolve-key').value;
+      try {
+        const res = await fetch(`${API}/contract/call`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method: 'resolve', args: [key] })
+        });
+        const data = await res.json();
+        alert(`Resolution: ${data.result || JSON.stringify(data)}`);
+        loadStats();
+      } catch (err) { alert('Error: ' + err.message); }
+    });
+
+    async function loadStats() {
+      try {
+        const res = await fetch(`${API}/contract/call`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method: 'stats', args: [] })
+        });
+        const data = await res.json();
+        const s = data.result || data;
+        document.getElementById('stat-claims').textContent = s.total_claims || 0;
+        document.getElementById('stat-staked').textContent = s.total_staked || 0;
+        document.getElementById('stat-resolved').textContent = s.total_resolved || 0;
+      } catch (err) { console.log('Stats unavailable'); }
+    }
+
+    loadStats();
+  </script>
+</body>
+</html>
