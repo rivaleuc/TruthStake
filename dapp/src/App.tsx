@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Toaster, toast } from 'sonner'
-
-const CONTRACT = '0x0743E75212a39d4F8BC1D981641df74A801A079C'
+import { read, write, CONTRACT } from './genlayer'
 
 type Claim = {
   id: number
+  key: string
   author: string
   handle: string
   time: string
@@ -14,54 +14,28 @@ type Claim = {
   trueStake: number
   falseStake: number
   status: 'open' | 'resolving'
+  resolved: boolean
+  verdict: string
+  reasoning: string
 }
 
-const SEED_CLAIMS: Claim[] = [
-  {
-    id: 1,
-    author: 'Mara Okonkwo',
-    handle: 'maraonchain',
-    time: '2h',
-    text: 'Ethereum gas fees averaged under 5 gwei for the entire month of May 2026.',
-    source: 'etherscan.io/gastracker',
-    trueStake: 8200,
-    falseStake: 3100,
+function mapClaim(key: string, c: any): Claim {
+  return {
+    id: Number(key),
+    key,
+    author: 'On-chain claim',
+    handle: `claim_${key}`,
+    time: 'on-chain',
+    text: String(c?.text ?? c?.[0] ?? ''),
+    source: String(c?.source_url ?? c?.[1] ?? 'no-source-attached'),
+    trueStake: Number(c?.stakers_true ?? c?.[5] ?? 0),
+    falseStake: Number(c?.stakers_false ?? c?.[6] ?? 0),
     status: 'open',
-  },
-  {
-    id: 2,
-    author: 'Dev Halberg',
-    handle: 'halberg',
-    time: '5h',
-    text: 'The GenLayer testnet processed more than 1M optimistic transactions in a single day last week.',
-    source: 'genlayer.com/stats',
-    trueStake: 4400,
-    falseStake: 4900,
-    status: 'open',
-  },
-  {
-    id: 3,
-    author: 'Sora Lin',
-    handle: 'soralin',
-    time: '8h',
-    text: 'No layer-2 has ever reverted a finalized state root on mainnet.',
-    source: 'l2beat.com',
-    trueStake: 12750,
-    falseStake: 1500,
-    status: 'resolving',
-  },
-  {
-    id: 4,
-    author: 'Quinn Adebayo',
-    handle: 'quinnchains',
-    time: '11h',
-    text: 'A majority of stablecoin volume in 2026 settles on chains other than Ethereum L1.',
-    source: 'defillama.com/stablecoins',
-    trueStake: 6600,
-    falseStake: 5800,
-    status: 'open',
-  },
-]
+    resolved: Boolean(c?.resolved ?? c?.[2] ?? false),
+    verdict: String(c?.verdict ?? c?.[3] ?? ''),
+    reasoning: String(c?.reasoning ?? c?.[4] ?? ''),
+  }
+}
 
 const TRENDING = [
   { tag: 'rollup-finality', count: '1.2k claims' },
@@ -107,7 +81,17 @@ function StakeBar({ claim }: { claim: Claim }) {
   )
 }
 
-function ClaimCard({ claim, onStake }: { claim: Claim; onStake: (id: number, side: 'true' | 'false') => void }) {
+function ClaimCard({
+  claim,
+  onStake,
+  onResolve,
+  resolving,
+}: {
+  claim: Claim
+  onStake: (id: number, side: 'true' | 'false') => void
+  onResolve: (claim: Claim) => void
+  resolving: boolean
+}) {
   return (
     <motion.article
       layout
@@ -143,20 +127,40 @@ function ClaimCard({ claim, onStake }: { claim: Claim; onStake: (id: number, sid
 
           <StakeBar claim={claim} />
 
-          <div className="mt-4 flex gap-2.5">
-            <button
-              onClick={() => onStake(claim.id, 'true')}
-              className="flex-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
-            >
-              ↑ Stake TRUE
-            </button>
-            <button
-              onClick={() => onStake(claim.id, 'false')}
-              className="flex-1 rounded-lg border border-rose-500/40 bg-rose-500/10 py-2 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/20"
-            >
-              ↓ Stake FALSE
-            </button>
-          </div>
+          {claim.resolved ? (
+            <div className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.06] p-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
+                Verdict · {claim.verdict || 'resolved'}
+              </p>
+              {claim.reasoning && (
+                <p className="mt-1 text-sm leading-relaxed text-white/70">{claim.reasoning}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="mt-4 flex gap-2.5">
+                <button
+                  onClick={() => onStake(claim.id, 'true')}
+                  className="flex-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                >
+                  ↑ Stake TRUE
+                </button>
+                <button
+                  onClick={() => onStake(claim.id, 'false')}
+                  className="flex-1 rounded-lg border border-rose-500/40 bg-rose-500/10 py-2 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/20"
+                >
+                  ↓ Stake FALSE
+                </button>
+              </div>
+              <button
+                onClick={() => onResolve(claim)}
+                disabled={resolving}
+                className="mt-2.5 w-full rounded-lg border border-amber-400/40 bg-amber-400/10 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-400/20 disabled:opacity-50"
+              >
+                {resolving ? 'Resolving on-chain…' : '⚖ Resolve with AI validators'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </motion.article>
@@ -164,30 +168,62 @@ function ClaimCard({ claim, onStake }: { claim: Claim; onStake: (id: number, sid
 }
 
 function App() {
-  const [claims, setClaims] = useState<Claim[]>(SEED_CLAIMS)
+  const [claims, setClaims] = useState<Claim[]>([])
   const [draft, setDraft] = useState('')
   const [src, setSrc] = useState('')
+  const [stats, setStats] = useState<{ total: number; resolved: number } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [posting, setPosting] = useState(false)
+  const [resolvingKey, setResolvingKey] = useState<string | null>(null)
 
-  function compose() {
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const s: any = await read('stats')
+        const total = Number(s?.total_claims ?? s?.[0] ?? 0)
+        setStats({ total, resolved: Number(s?.resolved ?? s?.[1] ?? 0) })
+        const loaded: Claim[] = []
+        for (let i = 0; i < total; i++) {
+          try {
+            const c: any = await read('get_claim', [String(i)])
+            loaded.push(mapClaim(String(i), c))
+          } catch {
+            /* skip unreadable claim */
+          }
+        }
+        loaded.reverse()
+        setClaims(loaded)
+      } catch (e: any) {
+        toast.error('Failed to load feed', { description: e?.message ?? String(e) })
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
+
+  async function compose() {
     if (!draft.trim()) {
       toast.error('Write a claim before posting.')
       return
     }
-    const next: Claim = {
-      id: Date.now(),
-      author: 'You',
-      handle: 'you',
-      time: 'now',
-      text: draft.trim(),
-      source: src.trim() || 'no-source-attached',
-      trueStake: 0,
-      falseStake: 0,
-      status: 'open',
+    setPosting(true)
+    toast('Posting claim on-chain…', { description: 'Finalizing — this can take 30–60s.' })
+    try {
+      await write('post_claim', [draft.trim(), src.trim()])
+      const s: any = await read('stats')
+      const total = Number(s?.total_claims ?? s?.[0] ?? 0)
+      setStats({ total, resolved: Number(s?.resolved ?? s?.[1] ?? 0) })
+      const key = String(total - 1)
+      const c: any = await read('get_claim', [key])
+      setClaims((cs) => [mapClaim(key, c), ...cs])
+      setDraft('')
+      setSrc('')
+      toast.success('Claim posted to the feed — open for staking.')
+    } catch (e: any) {
+      toast.error('Failed to post claim', { description: e?.message ?? String(e) })
+    } finally {
+      setPosting(false)
     }
-    setClaims((c) => [next, ...c])
-    setDraft('')
-    setSrc('')
-    toast.success('Claim posted to the feed — open for staking.')
   }
 
   function stake(id: number, side: 'true' | 'false') {
@@ -196,13 +232,33 @@ function App() {
         c.id === id
           ? {
               ...c,
-              trueStake: c.trueStake + (side === 'true' ? 500 : 0),
-              falseStake: c.falseStake + (side === 'false' ? 500 : 0),
+              trueStake: c.trueStake + (side === 'true' ? 1 : 0),
+              falseStake: c.falseStake + (side === 'false' ? 1 : 0),
             }
           : c,
       ),
     )
-    toast(`Staked 500 on ${side.toUpperCase()}`, { description: 'Position recorded on-chain (demo).' })
+    toast(`Staked on ${side.toUpperCase()}`, { description: 'Position recorded locally.' })
+  }
+
+  async function resolve(claim: Claim) {
+    setResolvingKey(claim.key)
+    setClaims((cs) => cs.map((c) => (c.key === claim.key ? { ...c, status: 'resolving' } : c)))
+    toast('Resolving claim…', { description: 'AI validators reaching consensus — 30–60s.' })
+    try {
+      await write('resolve', [claim.key])
+      const c: any = await read('get_claim', [claim.key])
+      setClaims((cs) => cs.map((x) => (x.key === claim.key ? mapClaim(claim.key, c) : x)))
+      const s: any = await read('stats')
+      setStats({ total: Number(s?.total_claims ?? s?.[0] ?? 0), resolved: Number(s?.resolved ?? s?.[1] ?? 0) })
+      const v = String((c as any)?.verdict ?? '')
+      toast.success('Claim resolved', { description: v ? `Verdict: ${v}` : 'Verdict recorded on-chain.' })
+    } catch (e: any) {
+      setClaims((cs) => cs.map((x) => (x.key === claim.key ? { ...x, status: 'open' } : x)))
+      toast.error('Failed to resolve', { description: e?.message ?? String(e) })
+    } finally {
+      setResolvingKey(null)
+    }
   }
 
   const totalStaked = claims.reduce((s, c) => s + c.trueStake + c.falseStake, 0)
@@ -227,7 +283,7 @@ function App() {
           <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
             <p className="text-[11px] uppercase tracking-widest text-white/40">network</p>
             <p className="mt-2 text-2xl font-bold text-emerald-400">{totalStaked.toLocaleString()}</p>
-            <p className="text-xs text-white/40">tokens staked across {claims.length} claims</p>
+            <p className="text-xs text-white/40">tokens staked across {stats?.total ?? claims.length} claims</p>
           </div>
 
           <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
@@ -264,17 +320,30 @@ function App() {
               />
               <button
                 onClick={compose}
-                className="rounded-full bg-emerald-500 px-5 py-1.5 text-sm font-bold text-[#0E1116] transition hover:bg-emerald-400"
+                disabled={posting}
+                className="rounded-full bg-emerald-500 px-5 py-1.5 text-sm font-bold text-[#0E1116] transition hover:bg-emerald-400 disabled:opacity-50"
               >
-                Post claim
+                {posting ? 'Posting…' : 'Post claim'}
               </button>
             </div>
           </div>
 
           {/* feed */}
+          {loading && (
+            <p className="px-5 py-8 text-center text-xs text-white/30">Loading claims from chain…</p>
+          )}
+          {!loading && claims.length === 0 && (
+            <p className="px-5 py-8 text-center text-xs text-white/30">No claims yet — be the first to post.</p>
+          )}
           <AnimatePresence initial={false}>
             {claims.map((c) => (
-              <ClaimCard key={c.id} claim={c} onStake={stake} />
+              <ClaimCard
+                key={c.key}
+                claim={c}
+                onStake={stake}
+                onResolve={resolve}
+                resolving={resolvingKey === c.key}
+              />
             ))}
           </AnimatePresence>
 
