@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Toaster, toast } from 'sonner'
-import { read, write, CONTRACT } from './genlayer'
+import { read, write, CONTRACT, connectWallet, isWalletConnected } from './genlayer'
 
 type Claim = {
   id: number
@@ -175,6 +175,17 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [posting, setPosting] = useState(false)
   const [resolvingKey, setResolvingKey] = useState<string | null>(null)
+  const [walletAddr, setWalletAddr] = useState<string | null>(null)
+
+  async function handleConnect() {
+    try {
+      const a = await connectWallet()
+      setWalletAddr(a.slice(0, 6) + '…' + a.slice(-4))
+      toast.success('Wallet connected')
+    } catch (e: any) {
+      toast.error(e.message || 'Connect failed')
+    }
+  }
 
   useEffect(() => {
     ;(async () => {
@@ -303,7 +314,19 @@ function App() {
         <main className="min-h-screen w-full max-w-xl flex-1 border-x border-white/[0.07]">
           {/* sticky composer */}
           <div className="sticky top-0 z-10 border-b border-white/[0.07] bg-[#0E1116]/85 px-5 py-4 backdrop-blur">
-            <p className="text-[11px] uppercase tracking-widest text-emerald-400/80">compose a claim</p>
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] uppercase tracking-widest text-emerald-400/80">compose a claim</p>
+              <button
+                onClick={handleConnect}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  isWalletConnected()
+                    ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                    : 'border-white/15 text-white/70 hover:border-emerald-500/50 hover:text-emerald-300'
+                }`}
+              >
+                {walletAddr ? `● ${walletAddr}` : 'Connect Wallet'}
+              </button>
+            </div>
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
