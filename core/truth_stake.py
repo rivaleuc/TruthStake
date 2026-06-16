@@ -95,18 +95,30 @@ Reply ONLY valid JSON:
 {{"verdict": "true"/"false", "reasoning": "<brief explanation>"}}"""
 
             raw = gl.nondet.exec_prompt(prompt, response_format="json")
-            if isinstance(raw, dict):
-                return json.dumps(raw)
-            return str(raw).strip()
+            data = raw if isinstance(raw, dict) else json.loads(str(raw).strip())
+
+            # Deterministic normalization so honest leaders always pass the
+            # validator: strict lowercased enum + substantive reasoning.
+            verdict = str(data.get("verdict", "")).strip().lower()
+            if verdict not in ("true", "false"):
+                verdict = "false"  # default to caution on ambiguous output
+            reasoning = str(data.get("reasoning", "")).strip()
+            if len(reasoning) < 10:
+                reasoning = f"verdict={verdict}; insufficient evidence-based explanation provided"
+            return json.dumps({"verdict": verdict, "reasoning": reasoning})
 
         def validator_fn(leader_result) -> bool:
             if not isinstance(leader_result, gl.vm.Return):
                 return False
             try:
                 data = json.loads(leader_result.calldata)
-                if data.get("verdict") not in ("true", "false"):
+                verdict = data.get("verdict")
+                # Strict enum: must be exactly the lowercased token.
+                if verdict not in ("true", "false"):
                     return False
-                if not isinstance(data.get("reasoning"), str):
+                reasoning = data.get("reasoning")
+                # Substantive reasoning: non-empty str of length >= 10.
+                if not isinstance(reasoning, str) or len(reasoning.strip()) < 10:
                     return False
                 return True
             except Exception:

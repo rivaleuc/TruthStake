@@ -28,22 +28,14 @@ function mapClaim(key: string, c: any): Claim {
     time: 'on-chain',
     text: String(c?.text ?? c?.[0] ?? ''),
     source: String(c?.source_url ?? c?.[1] ?? 'no-source-attached'),
-    trueStake: Number(c?.stakers_true ?? c?.[5] ?? 0),
-    falseStake: Number(c?.stakers_false ?? c?.[6] ?? 0),
+    trueStake: Array.isArray(c?.stakers_true) ? c.stakers_true.length : Number(c?.stakers_true ?? 0),
+    falseStake: Array.isArray(c?.stakers_false) ? c.stakers_false.length : Number(c?.stakers_false ?? 0),
     status: 'open',
     resolved: Boolean(c?.resolved ?? c?.[2] ?? false),
     verdict: String(c?.verdict ?? c?.[3] ?? ''),
     reasoning: String(c?.reasoning ?? c?.[4] ?? ''),
   }
 }
-
-const TRENDING = [
-  { tag: 'rollup-finality', count: '1.2k claims' },
-  { tag: 'gas-economics', count: '880 claims' },
-  { tag: 'oracle-truth', count: '640 claims' },
-  { tag: 'mev-supply-chain', count: '412 claims' },
-  { tag: 'restaking-risk', count: '305 claims' },
-]
 
 const RESOLUTION = [
   { n: '1', t: 'Stake', d: 'Back TRUE or FALSE with tokens. Your stake is your conviction.' },
@@ -88,7 +80,7 @@ function ClaimCard({
   resolving,
 }: {
   claim: Claim
-  onStake: (id: number, side: 'true' | 'false') => void
+  onStake: (claim: Claim, side: 'true' | 'false') => void
   onResolve: (claim: Claim) => void
   resolving: boolean
 }) {
@@ -140,13 +132,13 @@ function ClaimCard({
             <>
               <div className="mt-4 flex gap-2.5">
                 <button
-                  onClick={() => onStake(claim.id, 'true')}
+                  onClick={() => onStake(claim, 'true')}
                   className="flex-1 rounded-lg border border-emerald-500/40 bg-emerald-500/10 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
                 >
                   ↑ Stake TRUE
                 </button>
                 <button
-                  onClick={() => onStake(claim.id, 'false')}
+                  onClick={() => onStake(claim, 'false')}
                   className="flex-1 rounded-lg border border-rose-500/40 bg-rose-500/10 py-2 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/20"
                 >
                   ↓ Stake FALSE
@@ -237,19 +229,16 @@ function App() {
     }
   }
 
-  function stake(id: number, side: 'true' | 'false') {
-    setClaims((cs) =>
-      cs.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              trueStake: c.trueStake + (side === 'true' ? 1 : 0),
-              falseStake: c.falseStake + (side === 'false' ? 1 : 0),
-            }
-          : c,
-      ),
-    )
-    toast(`Staked on ${side.toUpperCase()}`, { description: 'Position recorded locally.' })
+  async function stake(claim: Claim, side: 'true' | 'false') {
+    toast(`Staking ${side.toUpperCase()} on-chain…`, { description: 'Finalizing — this can take 30–60s.' })
+    try {
+      await write('stake_on', [claim.key, side])
+      const c: any = await read('get_claim', [claim.key])
+      setClaims((cs) => cs.map((x) => (x.key === claim.key ? mapClaim(claim.key, c) : x)))
+      toast.success(`Staked ${side.toUpperCase()}`, { description: 'Position recorded on-chain.' })
+    } catch (e: any) {
+      toast.error('Failed to stake', { description: e?.message ?? String(e) })
+    }
   }
 
   async function resolve(claim: Claim) {
@@ -295,18 +284,6 @@ function App() {
             <p className="text-[11px] uppercase tracking-widest text-white/40">network</p>
             <p className="mt-2 text-2xl font-bold text-emerald-400">{totalStaked.toLocaleString()}</p>
             <p className="text-xs text-white/40">tokens staked across {stats?.total ?? claims.length} claims</p>
-          </div>
-
-          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
-            <p className="text-[11px] uppercase tracking-widest text-white/40">trending</p>
-            <ul className="mt-2 space-y-3">
-              {TRENDING.map((t) => (
-                <li key={t.tag} className="cursor-pointer">
-                  <p className="text-sm font-semibold text-white/90">#{t.tag}</p>
-                  <p className="text-[11px] text-white/35">{t.count}</p>
-                </li>
-              ))}
-            </ul>
           </div>
         </aside>
 

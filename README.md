@@ -4,8 +4,8 @@
 
 TruthStake lets anyone post a claim, stake on whether it's true or false, and have the outcome decided by GenLayer validators who crawl the cited source and reason about the evidence. The truth is not hard-coded — it's a living verdict reached by reading the web, and the winning side splits the losing pool.
 
-- **Contract (Bradbury, chain 4221):** `0x0743E75212a39d4F8BC1D981641df74A801A079C`
-- **Explorer:** https://explorer-bradbury.genlayer.com/contract/0x0743E75212a39d4F8BC1D981641df74A801A079C
+- **Contract (Bradbury, chain 4221):** `0x016fC29dAC7795A9d268EC068fbC09D5ecc233CC`
+- **Explorer:** https://explorer-bradbury.genlayer.com/contract/0x016fC29dAC7795A9d268EC068fbC09D5ecc233CC
 - **Live app:** https://truthstake.pages.dev
 
 ## What it does
